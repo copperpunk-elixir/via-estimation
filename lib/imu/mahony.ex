@@ -16,9 +16,9 @@ defmodule ViaEstimation.Imu.Mahony do
             pitch_rad: 0,
             yaw_rad: 0
 
-  @spec new(map()) :: struct()
+  @spec new(list()) :: struct()
   def new(parameters) do
-    new(Map.fetch!(parameters, :kp), Map.fetch!(parameters, :ki))
+    new(Keyword.fetch!(parameters, :kp), Keyword.fetch!(parameters, :ki))
   end
 
   @spec new(float(), float()) :: struct()
