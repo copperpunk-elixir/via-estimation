@@ -1,0 +1,9 @@
+{application,via_estimation,
+             [{applications,[kernel,stdlib,elixir,logger,via_utils,matrex]},
+              {description,"via_estimation"},
+              {modules,['Elixir.ViaEstimation.Ekf.Agl',
+                        'Elixir.ViaEstimation.Ekf.SevenState',
+                        'Elixir.ViaEstimation.Imu.Mahony',
+                        'Elixir.ViaEstimation.Imu.Utils']},
+              {registered,[]},
+              {vsn,"0.1.0"}]}.
