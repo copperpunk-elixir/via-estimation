@@ -13,7 +13,7 @@ defmodule Matrex.MixProject do
       package: package(),
       make_clean: ["clean"],
       make_env: %{
-        "MATREX_BLAS" => Application.get_env(:matrex, :blas, System.get_env("MATREX_BLAS"))
+        "MATREX_BLAS" => "noblas"#Application.get_env(:matrex, :blas, System.get_env("MATREX_BLAS"))
       },
       compilers: [:elixir_make] ++ Mix.compilers(),
       aliases: aliases(),

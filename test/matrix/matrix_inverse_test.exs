@@ -1,4 +1,4 @@
-defmodule ViaEstimation.Ekf.SevenState.MatrixInverseTest do
+defmodule ViaEstimation.Matrix.MatrixInverseTest do
   use ExUnit.Case
   require Logger
 
@@ -14,7 +14,7 @@ defmodule ViaEstimation.Ekf.SevenState.MatrixInverseTest do
       ])
 
     start_time = :erlang.monotonic_time(:nanosecond)
-    a_inv = ViaEstimation.Ekf.SevenState.inv_66(a)
+    a_inv = ViaEstimation.Matrix.inv_66_matrex(a)
     end_time = :erlang.monotonic_time(:nanosecond)
     # IO.puts(inspect(a_inv))
     IO.puts("dt: #{ViaUtils.Format.eftb((end_time - start_time) * 1.0e-6, 3)} ms")
