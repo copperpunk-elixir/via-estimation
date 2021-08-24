@@ -1,7 +1,7 @@
 defmodule ViaEstimation.Matrix do
   require Logger
 
-  def mult_67_77(a67, b77) do
+    def mult_77_71(a77, b71) do
     [
       a00,
       a01,
@@ -44,10 +44,79 @@ defmodule ViaEstimation.Matrix do
       a53,
       a54,
       a55,
-      a56
-    ] = a67
+      a56,
+      a60,
+      a61,
+      a62,
+      a63,
+      a64,
+      a65,
+      a66
+    ] = a77
+
+    [b00, b10, b20, b30, b40, b50, b60] = b71
 
     [
+      a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30 + a04 * b40 + a05 * b50 + a06 * b60,
+      a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30 + a14 * b40 + a15 * b50 + a16 * b60,
+      a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30 + a24 * b40 + a25 * b50 + a26 * b60,
+      a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30 + a34 * b40 + a35 * b50 + a36 * b60,
+      a40 * b00 + a41 * b10 + a42 * b20 + a43 * b30 + a44 * b40 + a45 * b50 + a46 * b60,
+      a50 * b00 + a51 * b10 + a52 * b20 + a53 * b30 + a54 * b40 + a55 * b50 + a56 * b60,
+      a60 * b00 + a61 * b10 + a62 * b20 + a63 * b30 + a64 * b40 + a65 * b50 + a66 * b60
+    ]
+  end
+
+  def mu(x) do
+    x+1
+  end
+  def mult_67_77(a67, b77) do
+    {
+      a00,
+      a01,
+      a02,
+      a03,
+      a04,
+      a05,
+      a06,
+      a10,
+      a11,
+      a12,
+      a13,
+      a14,
+      a15,
+      a16,
+      a20,
+      a21,
+      a22,
+      a23,
+      a24,
+      a25,
+      a26,
+      a30,
+      a31,
+      a32,
+      a33,
+      a34,
+      a35,
+      a36,
+      a40,
+      a41,
+      a42,
+      a43,
+      a44,
+      a45,
+      a46,
+      a50,
+      a51,
+      a52,
+      a53,
+      a54,
+      a55,
+      a56
+    } = a67
+
+    {
       b00,
       b01,
       b02,
@@ -97,9 +166,9 @@ defmodule ViaEstimation.Matrix do
       b64,
       b65,
       b66
-    ] = b77
+    } = b77
 
-    [
+    {
       a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30 + a04 * b40 + a05 * b50 + a06 * b60,
       a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31 + a04 * b41 + a05 * b51 + a06 * b61,
       a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32 + a04 * b42 + a05 * b52 + a06 * b62,
@@ -142,8 +211,21 @@ defmodule ViaEstimation.Matrix do
       a50 * b04 + a51 * b14 + a52 * b24 + a53 * b34 + a54 * b44 + a55 * b54 + a56 * b64,
       a50 * b05 + a51 * b15 + a52 * b25 + a53 * b35 + a54 * b45 + a55 * b55 + a56 * b65,
       a50 * b06 + a51 * b16 + a52 * b26 + a53 * b36 + a54 * b46 + a55 * b56 + a56 * b66
-    ]
+    }
   end
+
+def mult_33_31(a33, b31) do
+    {a00, a01, a02, a10, a11, a12, a20, a21, a22} = a33
+   {b00, b10, b20} = b31
+
+    {
+      a00 * b00 + a01 * b10 + a02 * b20,
+      a10 * b00 + a11 * b10 + a12 * b20,
+      a20 * b00 + a21 * b10 + a22 * b20
+    }
+  end
+
+
 
   @spec inv_66_matrex(struct()) :: struct()
   def inv_66_matrex(m) do
@@ -555,25 +637,30 @@ defmodule ViaEstimation.Matrix do
     mat_2d_list
   end
 
-  @spec matrex_to_1d_list(struct(), integer(), integer()) :: list()
-  def matrex_to_1d_list(matrix, rows, columns) do
-    Enum.reduce(1..rows, [], fn row_index, acc ->
-      row =
-        Enum.reduce(1..columns, [], fn col_index, row ->
-          row ++ [matrix[row_index][col_index]]
-        end)
+  @spec matrex_to_1d_list(struct()) :: list()
+  def matrex_to_1d_list(matrix) do
+    {num_rows, _num_cols} = Matrex.size(matrix)
 
+    Enum.reduce(1..num_rows, [], fn row_index, acc ->
+      row = Matrex.row_to_list(matrix, row_index)
       acc ++ row
+      # Enum.reduce(1..columns, [], fn col_index, row ->
+      #   Logger.debug("col index: #{col_index}")
+      #   Logger.debug("row: #{inspect(row)}")
+      #   row ++ [matrix[row_index][col_index]]
+      # end)
     end)
   end
 
-  @spec matrex_to_2d_list(struct(), integer(), integer()) :: list()
-  def matrex_to_2d_list(matrix, rows, columns) do
-    Enum.reduce(1..rows, [], fn row_index, acc ->
-      row =
-        Enum.reduce(1..columns, [], fn col_index, row ->
-          row ++ [matrix[row_index][col_index]]
-        end)
+  @spec matrex_to_2d_list(struct()) :: list()
+  def matrex_to_2d_list(matrix) do
+    {num_rows, _num_cols} = Matrex.size(matrix)
+
+    Enum.reduce(1..num_rows, [], fn row_index, acc ->
+      row = Matrex.row_to_list(matrix, row_index)
+      # Enum.reduce(1..columns, [], fn col_index, row ->
+      #   row ++ [matrix[row_index][col_index]]
+      # end)
 
       acc ++ [row]
     end)
