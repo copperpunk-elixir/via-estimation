@@ -1,4 +1,4 @@
-defmodule ViaMatrixSevenState.Mult6777Test do
+defmodule ViaEstimation.Matrix.Mult6777Test do
   use ExUnit.Case
   require Logger
 

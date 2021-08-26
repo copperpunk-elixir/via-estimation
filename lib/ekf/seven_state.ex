@@ -2,8 +2,6 @@ defmodule ViaEstimation.Ekf.SevenState do
   require Logger
   require ViaUtils.Constants, as: VC
 
-  @expected_imu_dt_s 0.005
-
   defstruct ekf_state: nil,
             ekf_cov: nil,
             r_gps: nil,
@@ -30,6 +28,8 @@ defmodule ViaEstimation.Ekf.SevenState do
 
   @spec predict(struct(), map()) :: struct
   def predict(state, dt_accel_gyro) do
+    # IO.puts("q_ekf: #{inspect(state.q_ekf)}")
+    # IO.puts("cov: #{inspect(state.ekf_cov)}")
     imu = ViaEstimation.Imu.Mahony.update(state.imu, dt_accel_gyro)
     dt_s = dt_accel_gyro.dt_s
     ax = dt_accel_gyro.ax_mpss
@@ -135,7 +135,7 @@ defmodule ViaEstimation.Ekf.SevenState do
       |> Matrex.dot(h_prime_transpose)
       |> Matrex.add(state.r_gps)
 
-    inv_mat = ViaEstimation.Matrix.inv_66_matrex(mat_to_invert)
+    inv_mat = ViaEstimation.Ekf.SevenStateMatrix.inv_66_matrex(mat_to_invert)
 
     k =
       Matrex.dot(ekf_cov, h_prime_transpose)
@@ -275,7 +275,7 @@ defmodule ViaEstimation.Ekf.SevenState do
     |> Matrex.set(6, 6, config[:qvel_z_std])
     |> Matrex.set(7, 7, config[:qyaw_std])
     |> Matrex.square()
-    |> Matrex.multiply(@expected_imu_dt_s)
+    |> Matrex.multiply(config[:expected_imu_dt_s])
   end
 
   @spec position_rrm(struct()) :: struct()
@@ -286,7 +286,7 @@ defmodule ViaEstimation.Ekf.SevenState do
       ekf_state = state.ekf_state
 
       ViaUtils.Location.location_from_point_with_dx_dy(state.origin, ekf_state[1], ekf_state[2])
-      |> Map.put(:altitude_m, ekf_state[3])
+      |> Map.put(:altitude_m, -ekf_state[3])
     end
   end
 
