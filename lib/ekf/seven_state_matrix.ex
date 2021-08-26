@@ -1,26 +1,34 @@
-defmodule ViaEstimation.Matrix do
+defmodule ViaEstimation.Ekf.SevenStateMatrix do
   require Logger
   require ViaUtils.Constants, as: VC
 
-  # get_rbg_prime
-  def mult_33_31(a33, b31) do
-    {a00, a01, a02, a10, a11, a12, a20, a21, a22} = a33
-    {b00, b10, b20} = b31
+  defstruct ekf_state: nil,
+            ekf_cov: nil,
+            r_gps: nil,
+            r_heading: nil,
+            q_ekf: nil,
+            imu: nil,
+            origin: nil,
+            heading_established: false
 
-    {
-      a00 * b00 + a01 * b10 + a02 * b20,
-      a10 * b00 + a11 * b10 + a12 * b20,
-      a20 * b00 + a21 * b10 + a22 * b20
+  def new(config) do
+    imu_config = Keyword.fetch!(config, :imu_config)
+    imu_type = Keyword.fetch!(imu_config, :imu_type)
+    imu_parameters = Keyword.fetch!(imu_config, :imu_parameters)
+
+    %ViaEstimation.Ekf.SevenStateMatrix{
+      ekf_state: {0, 0, 0, 0, 0, 0, 0},
+      ekf_cov: generate_ekf_cov(config),
+      r_gps: generate_r_gps(config),
+      r_heading: generate_r_heading(config),
+      q_ekf: generate_q(config),
+      imu: apply(imu_type, :new, [imu_parameters])
     }
   end
 
-  def create_g_prime(dt_s, g_prime_sub) do
-    {1, 0, 0, dt_s, 0, 0, 0, 0, 1, 0, 0, dt_s, 0, 0, 0, 0, 1, 0, 0, dt_s, 0, 0, 0, 0, 1, 0, 0,
-     elem(g_prime_sub, 0), 0, 0, 0, 0, 1, 0, elem(g_prime_sub, 1), 0, 0, 0, 0, 0, 1,
-     elem(g_prime_sub, 2), 0, 0, 0, 0, 0, 0, 1}
-  end
-
   def predict(state, dt_accel_gyro) do
+    # IO.puts("q_ekf: #{inspect(state.q_ekf)}")
+    # IO.puts("m cov: #{inspect(tuple_to_matrex(state.ekf_cov, 7, 7))}")
     imu = ViaEstimation.Imu.Mahony.update(state.imu, dt_accel_gyro)
     roll_rad = imu.roll_rad
     pitch_rad = imu.pitch_rad
@@ -66,6 +74,7 @@ defmodule ViaEstimation.Matrix do
        ekfs3 + accel_inertial_x * dt_s, ekfs4 + accel_inertial_y * dt_s,
        ekfs5 + (accel_inertial_z + VC.gravity()) * dt_s, yaw_rad}
 
+    # gps = g_prime_submatrix
     gps0 = rbgp00 * ax_mpss + rbgp01 * ay_mpss + rbgp02 * az_mpss
     gps1 = rbgp10 * ax_mpss + rbgp11 * ay_mpss + rbgp12 * az_mpss
     gps2 = rbgp20 * ax_mpss + rbgp21 * ay_mpss + rbgp22 * az_mpss
@@ -159,7 +168,7 @@ defmodule ViaEstimation.Matrix do
 
     dz = altitude_m - origin.altitude_m
 
-    {r00, r11, r22, r33, r44, r55} = state.r_ekf
+    {r00, r11, r22, r33, r44, r55} = state.r_gps
 
     {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, ekfcov06, ekfcov10, ekfcov11,
      ekfcov12, ekfcov13, ekfcov14, ekfcov15, ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
@@ -910,6 +919,74 @@ defmodule ViaEstimation.Matrix do
          ekfcov46 * k64 - ekfcov56 * k65}
 
     %{state | ekf_state: ekf_state, ekf_cov: ekf_cov, origin: origin}
+  end
+
+  def update_from_heading(state, heading_rad) do
+    if state.heading_established do
+      {ekf_state0, ekf_state1, ekf_state2, ekf_state3, ekf_state4, ekf_state5, ekf_state6} =
+        state.ekf_state
+
+      delta_z = ViaUtils.Motion.turn_left_or_right_for_correction(heading_rad - ekf_state6)
+
+      {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, ekfcov06, ekfcov10, ekfcov11,
+       ekfcov12, ekfcov13, ekfcov14, ekfcov15, ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
+       ekfcov24, ekfcov25, ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
+       ekfcov36, ekfcov40, ekfcov41, ekfcov42, ekfcov43, ekfcov44, ekfcov45, ekfcov46, ekfcov50,
+       ekfcov51, ekfcov52, ekfcov53, ekfcov54, ekfcov55, ekfcov56, ekfcov60, ekfcov61, ekfcov62,
+       ekfcov63, ekfcov64, ekfcov65, ekfcov66} = state.ekf_cov
+
+      {r_heading} = state.r_heading
+
+      mat_div = ekfcov66 + r_heading
+
+      inv_mat = if mat_div != 0, do: 1 / mat_div, else: 0
+
+      k00 = ekfcov06 * inv_mat
+      k10 = ekfcov16 * inv_mat
+      k20 = ekfcov26 * inv_mat
+      k30 = ekfcov36 * inv_mat
+      k40 = ekfcov46 * inv_mat
+      k50 = ekfcov56 * inv_mat
+      k60 = ekfcov66 * inv_mat
+
+      ekf_state = {
+        ekf_state0 + delta_z * k00,
+        ekf_state1 + delta_z * k10,
+        ekf_state2 + delta_z * k20,
+        ekf_state3 + delta_z * k30,
+        ekf_state4 + delta_z * k40,
+        ekf_state5 + delta_z * k50,
+        ekf_state6 + delta_z * k60
+      }
+
+      ekf_cov =
+        {ekfcov00 + ekfcov60 * k00, ekfcov01 + ekfcov61 * k00, ekfcov02 + ekfcov62 * k00,
+         ekfcov03 + ekfcov63 * k00, ekfcov04 + ekfcov64 * k00, ekfcov05 + ekfcov65 * k00,
+         ekfcov06 + ekfcov66 * k00, ekfcov10 + ekfcov60 * k10, ekfcov11 + ekfcov61 * k10,
+         ekfcov12 + ekfcov62 * k10, ekfcov13 + ekfcov63 * k10, ekfcov14 + ekfcov64 * k10,
+         ekfcov15 + ekfcov65 * k10, ekfcov16 + ekfcov66 * k10, ekfcov20 + ekfcov60 * k20,
+         ekfcov21 + ekfcov61 * k20, ekfcov22 + ekfcov62 * k20, ekfcov23 + ekfcov63 * k20,
+         ekfcov24 + ekfcov64 * k20, ekfcov25 + ekfcov65 * k20, ekfcov26 + ekfcov66 * k20,
+         ekfcov30 + ekfcov60 * k30, ekfcov31 + ekfcov61 * k30, ekfcov32 + ekfcov62 * k30,
+         ekfcov33 + ekfcov63 * k30, ekfcov34 + ekfcov64 * k30, ekfcov35 + ekfcov65 * k30,
+         ekfcov36 + ekfcov66 * k30, ekfcov40 + ekfcov60 * k40, ekfcov41 + ekfcov61 * k40,
+         ekfcov42 + ekfcov62 * k40, ekfcov43 + ekfcov63 * k40, ekfcov44 + ekfcov64 * k40,
+         ekfcov45 + ekfcov65 * k40, ekfcov46 + ekfcov66 * k40, ekfcov50 + ekfcov60 * k50,
+         ekfcov51 + ekfcov61 * k50, ekfcov52 + ekfcov62 * k50, ekfcov53 + ekfcov63 * k50,
+         ekfcov54 + ekfcov64 * k50, ekfcov55 + ekfcov65 * k50, ekfcov56 + ekfcov66 * k50,
+         -ekfcov60 * (k60 - 1), -ekfcov61 * (k60 - 1), -ekfcov62 * (k60 - 1),
+         -ekfcov63 * (k60 - 1), -ekfcov64 * (k60 - 1), -ekfcov65 * (k60 - 1),
+         -ekfcov66 * (k60 - 1)}
+
+      delta_yaw = delta_z * k60
+      imu = ViaEstimation.Imu.Utils.rotate_yaw_rad(state.imu, delta_yaw)
+      %{state | imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov}
+    else
+      Logger.debug("Established heading at #{ViaUtils.Format.eftb_deg(heading_rad, 2)}")
+      ekf_state = state.ekf_state |> Kernel.put_elem(6, heading_rad)
+
+      %{state | ekf_state: ekf_state, heading_established: true}
+    end
   end
 
   # g_prime*ekf_cov
@@ -1941,5 +2018,107 @@ defmodule ViaEstimation.Matrix do
       end)
 
     matrix
+  end
+
+  @spec generate_ekf_cov(list()) :: tuple()
+  def generate_ekf_cov(config) do
+    init_std_devs =
+      Keyword.fetch!(config, :init_std_devs)
+      |> Enum.with_index()
+
+    ekf_cov_list =
+      Enum.reduce(init_std_devs, [], fn {std_dev, index}, acc ->
+        row =
+          [0, 0, 0, 0, 0, 0, 0]
+          |> List.replace_at(index, std_dev * std_dev)
+
+        acc ++ row
+      end)
+
+    List.to_tuple(ekf_cov_list)
+  end
+
+  @spec generate_r_gps(list()) :: tuple()
+  def generate_r_gps(config) do
+    keys = [
+      :gpspos_xy_std,
+      :gpspos_xy_std,
+      :gpspos_z_std,
+      :gpsvel_xy_std,
+      :gpsvel_xy_std,
+      :gpsvel_z_std
+    ]
+
+    Enum.map(keys, fn key ->
+      value = Keyword.fetch!(config, key)
+      value * value
+    end)
+    |> List.to_tuple()
+  end
+
+  @spec generate_r_heading(list()) :: tuple()
+  def generate_r_heading(config) do
+    value = Keyword.fetch!(config, :gpsyaw_std)
+    {value * value}
+  end
+
+  @spec generate_q(list()) :: tuple()
+  def generate_q(config) do
+    keys = [
+      :qpos_xy_std,
+      :qpos_xy_std,
+      :qpos_z_std,
+      :qvel_xy_std,
+      :qvel_xy_std,
+      :qvel_z_std,
+      :qyaw_std
+    ]
+
+    expected_imu_dt_s = Keyword.fetch!(config, :expected_imu_dt_s)
+
+    Enum.map(keys, fn key ->
+      value = Keyword.fetch!(config, key)
+      value * value * expected_imu_dt_s
+    end)
+    |> List.to_tuple()
+  end
+
+  @spec position_rrm(struct()) :: struct()
+  def position_rrm(state) do
+    if is_nil(state.origin) do
+      nil
+    else
+      {latitude_rad, longitude_rad, position_down_m, _, _, _, _} = state.ekf_state
+
+      ViaUtils.Location.location_from_point_with_dx_dy(state.origin, latitude_rad, longitude_rad)
+      |> Map.put(:altitude_m, -position_down_m)
+    end
+  end
+
+  @spec velocity_mps(struct()) :: map()
+  def velocity_mps(state) do
+    {_, _, _, v_north_mps, v_east_mps, v_down_mps} = state.ekf_state
+    %{north_mps: v_north_mps, east_mps: v_east_mps, down_mps: v_down_mps}
+  end
+
+  @spec position_rrm_velocity_mps(struct()) :: tuple()
+  def position_rrm_velocity_mps(state) do
+    {latitude_rad, longitude_rad, position_down_m, v_north_mps, v_east_mps, v_down_mps, _} =
+      state.ekf_state
+
+    position_rrm =
+      if is_nil(state.origin) do
+        nil
+      else
+        ViaUtils.Location.location_from_point_with_dx_dy(
+          state.origin,
+          latitude_rad,
+          longitude_rad
+        )
+        |> Map.put(:altitude_m, -position_down_m)
+      end
+
+    velocity_mps = %{north_mps: v_north_mps, east_mps: v_east_mps, down_mps: v_down_mps}
+    {position_rrm, velocity_mps}
   end
 end

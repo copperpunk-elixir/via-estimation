@@ -1,4 +1,4 @@
-defmodule ViaEstimation.Matrix.PredictTest do
+defmodule ViaEstimation.Matrix.UpdateFromGpsTest do
   use ExUnit.Case
   require Logger
 
@@ -38,6 +38,10 @@ defmodule ViaEstimation.Matrix.PredictTest do
     }
 
     num_ops = 10
+
+    heading_rad_init = ViaUtils.Math.deg2rad(15.2)
+    heading_rad = ViaUtils.Math.deg2rad(16.0)
+
     ekf_matrex = ViaEstimation.Ekf.SevenState.new(config)
 
     start_time_matrex = :erlang.monotonic_time(:nanosecond)
@@ -47,18 +51,26 @@ defmodule ViaEstimation.Matrix.PredictTest do
         ViaEstimation.Ekf.SevenState.predict(ekf, dt_accel_gyro)
       end)
 
+    ekf_matrex =
+      ViaEstimation.Ekf.SevenState.update_from_heading(ekf_matrex, heading_rad_init)
+      |> ViaEstimation.Ekf.SevenState.update_from_heading(heading_rad)
+
     end_time_matrex = :erlang.monotonic_time(:nanosecond)
     IO.puts("matrex state: #{inspect(ekf_matrex.ekf_state)}")
     IO.puts("matrex cov: #{inspect(ekf_matrex.ekf_cov)}")
-    IO.puts("config: #{inspect(config)}")
 
-    ekf_hardcode = ViaEstimation.Ekf.SevenStateMatrix.new(config)
+    ekf_hc = ViaEstimation.Ekf.SevenStateMatrix.new(config)
+
     start_time_hc = :erlang.monotonic_time(:nanosecond)
 
     ekf_hc =
-      Enum.reduce(1..num_ops, ekf_hardcode, fn _x, ekf ->
+      Enum.reduce(1..num_ops, ekf_hc, fn _x, ekf ->
         ViaEstimation.Ekf.SevenStateMatrix.predict(ekf, dt_accel_gyro)
       end)
+
+    ekf_hc =
+      ViaEstimation.Ekf.SevenStateMatrix.update_from_heading(ekf_hc, heading_rad_init)
+      |> ViaEstimation.Ekf.SevenStateMatrix.update_from_heading(heading_rad)
 
     end_time_hc = :erlang.monotonic_time(:nanosecond)
 
@@ -76,6 +88,8 @@ defmodule ViaEstimation.Matrix.PredictTest do
     IO.puts(
       "dt via: #{ViaUtils.Format.eftb((end_time_hc - start_time_hc) * 1.0e-6 / num_ops, 3)} ms"
     )
+
+    Process.sleep(200)
 
     Enum.each(1..7, fn i ->
       Enum.each(1..1, fn j ->

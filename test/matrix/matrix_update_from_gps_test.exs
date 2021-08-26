@@ -1,4 +1,4 @@
-defmodule ViaEstimation.Matrix.PredictTest do
+defmodule ViaEstimation.Matrix.UpdateFromGpsTest do
   use ExUnit.Case
   require Logger
 
@@ -38,6 +38,15 @@ defmodule ViaEstimation.Matrix.PredictTest do
     }
 
     num_ops = 10
+
+    position_rrm = ViaUtils.Location.new_location_input_degrees(45.123, -120.234, 123.5)
+
+    velocity_mps = %{
+      north_mps: 1.23,
+      east_mps: -3.25,
+      down_mps: -0.1
+    }
+
     ekf_matrex = ViaEstimation.Ekf.SevenState.new(config)
 
     start_time_matrex = :erlang.monotonic_time(:nanosecond)
@@ -47,18 +56,31 @@ defmodule ViaEstimation.Matrix.PredictTest do
         ViaEstimation.Ekf.SevenState.predict(ekf, dt_accel_gyro)
       end)
 
+    ekf_matrex =
+      ViaEstimation.Ekf.SevenState.update_from_gps(
+        ekf_matrex,
+        position_rrm,
+        velocity_mps
+      )
+
     end_time_matrex = :erlang.monotonic_time(:nanosecond)
     IO.puts("matrex state: #{inspect(ekf_matrex.ekf_state)}")
     IO.puts("matrex cov: #{inspect(ekf_matrex.ekf_cov)}")
-    IO.puts("config: #{inspect(config)}")
 
-    ekf_hardcode = ViaEstimation.Ekf.SevenStateMatrix.new(config)
+    ekf_hc = ViaEstimation.Ekf.SevenStateMatrix.new(config)
     start_time_hc = :erlang.monotonic_time(:nanosecond)
 
     ekf_hc =
-      Enum.reduce(1..num_ops, ekf_hardcode, fn _x, ekf ->
+      Enum.reduce(1..num_ops, ekf_hc, fn _x, ekf ->
         ViaEstimation.Ekf.SevenStateMatrix.predict(ekf, dt_accel_gyro)
       end)
+
+    ekf_hc =
+      ViaEstimation.Ekf.SevenStateMatrix.update_from_gps(
+        ekf_hc,
+        position_rrm,
+        velocity_mps
+      )
 
     end_time_hc = :erlang.monotonic_time(:nanosecond)
 
