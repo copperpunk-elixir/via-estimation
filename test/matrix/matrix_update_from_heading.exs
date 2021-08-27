@@ -42,73 +42,22 @@ defmodule ViaEstimation.Matrix.UpdateFromGpsTest do
     heading_rad_init = ViaUtils.Math.deg2rad(15.2)
     heading_rad = ViaUtils.Math.deg2rad(16.0)
 
-    ekf_matrex = ViaEstimation.Ekf.SevenState.new(config)
-
-    start_time_matrex = :erlang.monotonic_time(:nanosecond)
-
-    ekf_matrex =
-      Enum.reduce(1..num_ops, ekf_matrex, fn _x, ekf ->
-        ViaEstimation.Ekf.SevenState.predict(ekf, dt_accel_gyro)
-      end)
-
-    ekf_matrex =
-      ViaEstimation.Ekf.SevenState.update_from_heading(ekf_matrex, heading_rad_init)
-      |> ViaEstimation.Ekf.SevenState.update_from_heading(heading_rad)
-
-    end_time_matrex = :erlang.monotonic_time(:nanosecond)
-    IO.puts("matrex state: #{inspect(ekf_matrex.ekf_state)}")
-    IO.puts("matrex cov: #{inspect(ekf_matrex.ekf_cov)}")
-
-    ekf_hc = ViaEstimation.Ekf.SevenStateMatrix.new(config)
+    ekf_hc = ViaEstimation.Ekf.SevenState.new(config)
 
     start_time_hc = :erlang.monotonic_time(:nanosecond)
 
     ekf_hc =
       Enum.reduce(1..num_ops, ekf_hc, fn _x, ekf ->
-        ViaEstimation.Ekf.SevenStateMatrix.predict(ekf, dt_accel_gyro)
+        ViaEstimation.Ekf.SevenState.predict(ekf, dt_accel_gyro)
       end)
 
-    ekf_hc =
-      ViaEstimation.Ekf.SevenStateMatrix.update_from_heading(ekf_hc, heading_rad_init)
-      |> ViaEstimation.Ekf.SevenStateMatrix.update_from_heading(heading_rad)
+    ViaEstimation.Ekf.SevenState.update_from_heading(ekf_hc, heading_rad_init)
+    |> ViaEstimation.Ekf.SevenState.update_from_heading(heading_rad)
 
     end_time_hc = :erlang.monotonic_time(:nanosecond)
-
-    ekf_state_hc_matrex =
-      ViaEstimation.Ekf.SevenStateMatrix.tuple_to_matrex(ekf_hc.ekf_state, 7, 1)
-
-    ekf_cov_hc_matrex = ViaEstimation.Ekf.SevenStateMatrix.tuple_to_matrex(ekf_hc.ekf_cov, 7, 7)
-    IO.puts("hc state: #{inspect(ekf_state_hc_matrex)}")
-    IO.puts("hc cov: #{inspect(ekf_cov_hc_matrex)}")
-
-    IO.puts(
-      "dt matrex: #{ViaUtils.Format.eftb((end_time_matrex - start_time_matrex) * 1.0e-6 / num_ops, 3)} ms"
-    )
 
     IO.puts(
       "dt via: #{ViaUtils.Format.eftb((end_time_hc - start_time_hc) * 1.0e-6 / num_ops, 3)} ms"
     )
-
-    Process.sleep(200)
-
-    Enum.each(1..7, fn i ->
-      Enum.each(1..1, fn j ->
-        assert_in_delta(
-          Matrex.at(ekf_matrex.ekf_state, i, j),
-          Matrex.at(ekf_state_hc_matrex, i, j),
-          0.0001
-        )
-      end)
-    end)
-
-    Enum.each(1..7, fn i ->
-      Enum.each(1..7, fn j ->
-        assert_in_delta(
-          Matrex.at(ekf_matrex.ekf_cov, i, j),
-          Matrex.at(ekf_cov_hc_matrex, i, j),
-          0.0001
-        )
-      end)
-    end)
   end
 end

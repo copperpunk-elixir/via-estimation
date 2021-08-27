@@ -122,4 +122,14 @@ defmodule ViaUtils.Motion do
       yaw: yaw
     }
   end
+
+   @spec imu_rpy_to_string(struct(), integer()) :: binary()
+  def imu_rpy_to_string(imu, decimals) do
+    rpy =
+      Enum.map([imu.roll_rad, imu.pitch_rad, imu.yaw_rad], fn x ->
+        ViaUtils.Math.rad2deg(x)
+      end)
+
+    ViaUtils.Format.eftb_list(rpy, decimals)
+  end
 end

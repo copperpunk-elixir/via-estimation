@@ -136,13 +136,8 @@ defmodule ViaUtils.Comms do
   end
 
   def is_in_group?(group, pid) do
-    members =
-      case :pg.get_members(group) do
-        {:error, _} -> []
-        members -> members
-      end
-
-    Enum.member?(members, pid)
+    :pg.get_members(group)
+    |> Enum.member?(pid)
   end
 
   def get_group_members(groups, group, global_or_local) do

@@ -1,13 +1,13 @@
 defmodule ViaEstimation.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/copperpunk-elixir/via-estimation"
 
   def project do
     [
       app: :via_estimation,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.12",
       description: description(),
       package: package(),
@@ -50,10 +50,7 @@ defmodule ViaEstimation.MixProject do
     [
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
       {:ring_logger, "~> 0.8.1"},
-      {:via_utils, "~> 0.1.0"},
-      {:matrex, "~> 0.6.8"}
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:via_utils, "~> 0.1.1"}
     ]
   end
 end

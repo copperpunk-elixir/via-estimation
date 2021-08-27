@@ -1,13 +1,13 @@
 defmodule ViaUtils.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/copperpunk-elixir/via-utils"
 
   def project do
     [
       app: :via_utils,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.12",
       description: description(),
       package: package(),
