@@ -50,7 +50,7 @@ defmodule ViaEstimation.MixProject do
     [
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
       {:ring_logger, "~> 0.8.1"},
-      {:via_utils, "~> 0.1.1"}
+      {:via_utils,git: "https://github.com/copperpunk-elixir/via-utils.git", tag: "v0.1.4-alpha"}
     ]
   end
 end
