@@ -9,7 +9,7 @@ This package can be installed by adding `via_estimation` to your list of depende
 ```elixir
 def deps do
   [
-    {:via_estimation, "~> 0.1.0"}
+    {:via_estimation, "~> 0.1.1"}
   ]
 end
 ```
