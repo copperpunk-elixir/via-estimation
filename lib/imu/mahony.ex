@@ -1,6 +1,7 @@
 defmodule ViaEstimation.Imu.Mahony do
   require Logger
   require ViaUtils.Constants, as: VC
+  require ViaUtils.Shared.ValueNames, as: SVN
   # @accel_mag_min 9.0
   # @accel_mag_max 10.0
   @accel_xy_mag_max 1.0
@@ -27,12 +28,20 @@ defmodule ViaEstimation.Imu.Mahony do
   end
 
   @spec update(struct(), map()) :: struct()
-  def update(imu, dt_accel_gyro) do
-    dt_s = dt_accel_gyro.dt_s
-    ax = dt_accel_gyro.ax_mpss
-    ay = dt_accel_gyro.ay_mpss
-    az = dt_accel_gyro.az_mpss
-    {q0, q1, q2, q3} = imu.quat
+  def update(
+        imu,
+        %{
+          SVN.accel_x_mpss() => ax,
+          SVN.accel_y_mpss() => ay,
+          SVN.accel_z_mpss() => az,
+          SVN.gyro_x_rps() => gx,
+          SVN.gyro_y_rps() => gy,
+          SVN.gyro_z_rps() => gz,
+          SVN.dt_s() => dt_s
+        }
+      ) do
+    %{quat: quat, kp: kp, ki: ki} = imu
+    {q0, q1, q2, q3} = quat
 
     {gx, gy, gz, integral_fbx, integral_fby, integral_fbz} =
       if ax != 0 or ay != 0 or az != 0 do
@@ -42,8 +51,8 @@ defmodule ViaEstimation.Imu.Mahony do
             ax,
             ay,
             az,
-            imu.kp,
-            imu.ki
+            kp,
+            ki
           )
 
         # Only use the accel to correct if the accel values are within range
@@ -73,9 +82,9 @@ defmodule ViaEstimation.Imu.Mahony do
             end
 
           # Apply proportional feedback
-          gx = dt_accel_gyro.gx_rps + kp * ex + ki * integral_fbx
-          gy = dt_accel_gyro.gy_rps + kp * ey + ki * integral_fby
-          gz = dt_accel_gyro.gz_rps + kp * ez + ki * integral_fbz
+          gx = gx + kp * ex + ki * integral_fbx
+          gy = gy + kp * ey + ki * integral_fby
+          gz = gz + kp * ez + ki * integral_fbz
 
           # Logger.error(
           #   "dt gx pre/post: #{ViaUtils.Format.eftb(dt_s, 4)}: #{ViaUtils.Format.eftb_deg(dt_accel_gyro.gx_rps, 1)}/#{ViaUtils.Format.eftb_deg(gx, 1)}"
@@ -83,11 +92,10 @@ defmodule ViaEstimation.Imu.Mahony do
 
           {gx, gy, gz, integral_fbx, integral_fby, integral_fbz}
         else
-          {dt_accel_gyro.gx_rps, dt_accel_gyro.gy_rps, dt_accel_gyro.gz_rps, 0, 0, 0}
+          {gx, gy, gz, 0, 0, 0}
         end
       else
-        {dt_accel_gyro.gx_rps, dt_accel_gyro.gy_rps, dt_accel_gyro.gz_rps, imu.integral_fbx,
-         imu.integral_fby, imu.integral_fbz}
+        {gx, gy, gz, imu.integral_fbx, imu.integral_fby, imu.integral_fbz}
       end
 
     # Integrate rate of change of quaternion

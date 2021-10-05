@@ -9,7 +9,7 @@ erl_crash.dump
 .rebar
 rel/example_project
 ebin/*.beam
-deps
+deps/
 cover/
 tmp/
 doc/

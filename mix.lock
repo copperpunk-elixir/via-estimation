@@ -10,5 +10,5 @@
   "matrex": {:hex, :matrex, "0.6.8", "ccb491e661bae7931ee6b0e68f5e1cd28528e5360a59bc3ab4d759b89be1701e", [:make], [{:elixir_make, "~> 0.4", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "043ef9fdd9809b012568915f2fc396ea5c5631fd792f75c1148f03d478d60901"},
   "nimble_parsec": {:hex, :nimble_parsec, "1.1.0", "3a6fca1550363552e54c216debb6a9e95bd8d32348938e13de5eda962c0d7f89", [:mix], [], "hexpm", "08eb32d66b706e913ff748f11694b17981c0b04a33ef470e33e11b3d3ac8f54b"},
   "ring_logger": {:hex, :ring_logger, "0.8.2", "78e0ffbf89b3f5b3c58f8660cb6b6fe2ca7ed5f56dc64e993119189d629c278c", [:mix], [{:circular_buffer, "~> 0.4.0", [hex: :circular_buffer, repo: "hexpm", optional: false]}], "hexpm", "864c8982bfcdc17b7501d00cc2bcede6727ebf95cbeba30e70c795d03f9138c1"},
-  "via_utils": {:hex, :via_utils, "0.1.1", "93f69487b81785203b8ed954999fb304b4376f442c2e28cc0a0acaae1fcf3ee9", [:mix], [{:circuits_uart, "~> 1.4.2", [hex: :circuits_uart, repo: "hexpm", optional: false]}, {:ring_logger, "~> 0.8.1", [hex: :ring_logger, repo: "hexpm", optional: false]}], "hexpm", "5fccdc8fe75e68e80096f54c5eb0d301daa4ae78ef7f61b9712fc381d3a6335c"},
+  "via_utils": {:git, "https://github.com/copperpunk-elixir/via-utils.git", "4baa296a3f6471d13c013d6255e27827a27779b8", [tag: "v0.1.4-alpha"]},
 }

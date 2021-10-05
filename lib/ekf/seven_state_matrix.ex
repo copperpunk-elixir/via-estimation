@@ -1,6 +1,7 @@
 defmodule ViaEstimation.Ekf.SevenState do
   require Logger
   require ViaUtils.Constants, as: VC
+  require ViaUtils.Shared.ValueNames, as: SVN
 
   defstruct ekf_state: nil,
             ekf_cov: nil,
@@ -26,17 +27,18 @@ defmodule ViaEstimation.Ekf.SevenState do
     }
   end
 
-  def predict(state, dt_accel_gyro) do
+  def predict(
+        state,
+        %{
+          SVN.accel_x_mpss() => ax_mpss,
+          SVN.accel_y_mpss() => ay_mpss,
+          SVN.accel_z_mpss() => az_mpss,
+          SVN.dt_s() => dt_s
+        } = dt_accel_gyro
+      ) do
     # IO.puts("q_ekf: #{inspect(state.q_ekf)}")
     imu = ViaEstimation.Imu.Mahony.update(state.imu, dt_accel_gyro)
-    roll_rad = imu.roll_rad
-    pitch_rad = imu.pitch_rad
-    yaw_rad = imu.yaw_rad
-    dt_s = dt_accel_gyro.dt_s
-    ax_mpss = dt_accel_gyro.ax_mpss
-    ay_mpss = dt_accel_gyro.ay_mpss
-    az_mpss = dt_accel_gyro.az_mpss
-
+    %{roll_rad: roll_rad, pitch_rad: pitch_rad, yaw_rad: yaw_rad} = imu
     # Calculcate rbg_prime
     cosphi = :math.cos(roll_rad)
     sinphi = :math.sin(roll_rad)
@@ -153,12 +155,20 @@ defmodule ViaEstimation.Ekf.SevenState do
     %{state | imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov}
   end
 
-  def update_from_gps(state, position_rrm, velocity_mps) do
+  def update_from_gps(
+        state,
+        position_rrm,
+        %{
+          SVN.v_north_mps() => v_north_mps,
+          SVN.v_east_mps() => v_east_mps,
+          SVN.v_down_mps() => v_down_mps
+        } = _velocity_mps
+      ) do
     altitude_m = -position_rrm.altitude_m
 
     origin =
       if is_nil(state.origin) do
-        position_rrm |> Map.put(:altitude_m, altitude_m)
+        position_rrm |> Map.put(SVN.altitude_m(), altitude_m)
       else
         state.origin
       end
@@ -803,9 +813,9 @@ defmodule ViaEstimation.Ekf.SevenState do
     dz0 = dx - ekf_state0
     dz1 = dy - ekf_state1
     dz2 = dz - ekf_state2
-    dz3 = velocity_mps.north_mps - ekf_state3
-    dz4 = velocity_mps.east_mps - ekf_state4
-    dz5 = velocity_mps.down_mps - ekf_state5
+    dz3 = v_north_mps - ekf_state3
+    dz4 = v_east_mps - ekf_state4
+    dz5 = v_down_mps - ekf_state5
 
     ekf_state = {
       ekf_state0 + dz0 * k00 + dz1 * k01 + dz2 * k02 + dz3 * k03 + dz4 * k04 + dz5 * k05,
@@ -1635,14 +1645,19 @@ defmodule ViaEstimation.Ekf.SevenState do
       {latitude_rad, longitude_rad, position_down_m, _, _, _, _} = state.ekf_state
 
       ViaUtils.Location.location_from_point_with_dx_dy(state.origin, latitude_rad, longitude_rad)
-      |> Map.put(:altitude_m, -position_down_m)
+      |> Map.put(SVN.altitude_m(), -position_down_m)
     end
   end
 
   @spec velocity_mps(struct()) :: map()
   def velocity_mps(state) do
     {_, _, _, v_north_mps, v_east_mps, v_down_mps} = state.ekf_state
-    %{north_mps: v_north_mps, east_mps: v_east_mps, down_mps: v_down_mps}
+
+    %{
+      SVN.v_north_mps() => v_north_mps,
+      SVN.v_east_mps() => v_east_mps,
+      SVN.v_down_mps() => v_down_mps
+    }
   end
 
   @spec position_rrm_velocity_mps(struct()) :: tuple()
@@ -1659,10 +1674,15 @@ defmodule ViaEstimation.Ekf.SevenState do
           latitude_rad,
           longitude_rad
         )
-        |> Map.put(:altitude_m, -position_down_m)
+        |> Map.put(SVN.altitude_m(), -position_down_m)
       end
 
-    velocity_mps = %{north_mps: v_north_mps, east_mps: v_east_mps, down_mps: v_down_mps}
+    velocity_mps = %{
+      SVN.v_north_mps() => v_north_mps,
+      SVN.v_east_mps() => v_east_mps,
+      SVN.v_down_mps() => v_down_mps
+    }
+
     {position_rrm, velocity_mps}
   end
 end
