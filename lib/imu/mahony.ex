@@ -28,32 +28,25 @@ defmodule ViaEstimation.Imu.Mahony do
   end
 
   @spec update(struct(), map()) :: struct()
-  def update(
-        imu,
-        %{
-          SVN.accel_x_mpss() => ax,
-          SVN.accel_y_mpss() => ay,
-          SVN.accel_z_mpss() => az,
-          SVN.gyro_x_rps() => gx,
-          SVN.gyro_y_rps() => gy,
-          SVN.gyro_z_rps() => gz,
-          SVN.dt_s() => dt_s
-        }
-      ) do
+  def update(imu, dt_accel_gyro) do
     %{quat: quat, kp: kp, ki: ki} = imu
     {q0, q1, q2, q3} = quat
+
+    %{
+      SVN.accel_x_mpss() => ax,
+      SVN.accel_y_mpss() => ay,
+      SVN.accel_z_mpss() => az,
+      SVN.gyro_x_rps() => gx,
+      SVN.gyro_y_rps() => gy,
+      SVN.gyro_z_rps() => gz,
+      SVN.dt_s() => dt_s
+    } = dt_accel_gyro
 
     {gx, gy, gz, integral_fbx, integral_fby, integral_fbz} =
       if ax != 0 or ay != 0 or az != 0 do
         # Normalise accelerometer measurement
         {ax, ay, az, kp, ki, accel_mag_in_range} =
-          normalized_accel_and_in_range(
-            ax,
-            ay,
-            az,
-            kp,
-            ki
-          )
+          normalized_accel_and_in_range(ax, ay, az, kp, ki)
 
         # Only use the accel to correct if the accel values are within range
         if accel_mag_in_range do

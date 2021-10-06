@@ -27,15 +27,14 @@ defmodule ViaEstimation.Ekf.SevenState do
     }
   end
 
-  def predict(
-        state,
-        %{
-          SVN.accel_x_mpss() => ax_mpss,
-          SVN.accel_y_mpss() => ay_mpss,
-          SVN.accel_z_mpss() => az_mpss,
-          SVN.dt_s() => dt_s
-        } = dt_accel_gyro
-      ) do
+  def predict(state, dt_accel_gyro) do
+    %{
+      SVN.accel_x_mpss() => ax_mpss,
+      SVN.accel_y_mpss() => ay_mpss,
+      SVN.accel_z_mpss() => az_mpss,
+      SVN.dt_s() => dt_s
+    } = dt_accel_gyro
+
     # IO.puts("q_ekf: #{inspect(state.q_ekf)}")
     imu = ViaEstimation.Imu.Mahony.update(state.imu, dt_accel_gyro)
     %{roll_rad: roll_rad, pitch_rad: pitch_rad, yaw_rad: yaw_rad} = imu
@@ -155,16 +154,14 @@ defmodule ViaEstimation.Ekf.SevenState do
     %{state | imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov}
   end
 
-  def update_from_gps(
-        state,
-        position_rrm,
-        %{
-          SVN.v_north_mps() => v_north_mps,
-          SVN.v_east_mps() => v_east_mps,
-          SVN.v_down_mps() => v_down_mps
-        } = _velocity_mps
-      ) do
-    altitude_m = -position_rrm.altitude_m
+  def update_from_gps(state, position_rrm, velocity_mps) do
+    %{
+      SVN.v_north_mps() => v_north_mps,
+      SVN.v_east_mps() => v_east_mps,
+      SVN.v_down_mps() => v_down_mps
+    } = velocity_mps
+
+    altitude_m = -Map.fetch(position_rrm, SVN.altitude_m())
 
     origin =
       if is_nil(state.origin) do
