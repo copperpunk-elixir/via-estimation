@@ -161,7 +161,7 @@ defmodule ViaEstimation.Ekf.SevenState do
       SVN.v_down_mps() => v_down_mps
     } = velocity_mps
 
-    altitude_m = -Map.fetch(position_rrm, SVN.altitude_m())
+    altitude_m = -Map.fetch!(position_rrm, SVN.altitude_m())
 
     origin =
       if is_nil(state.origin) do
