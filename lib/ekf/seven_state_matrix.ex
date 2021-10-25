@@ -35,8 +35,10 @@ defmodule ViaEstimation.Ekf.SevenState do
       SVN.dt_s() => dt_s
     } = dt_accel_gyro
 
-    # IO.puts("q_ekf: #{inspect(state.q_ekf)}")
-    imu = ViaEstimation.Imu.Mahony.update(state.imu, dt_accel_gyro)
+    %{imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov, q_ekf: q_ekf} = state
+
+    # IO.puts("q_ekf: #{inspect(q_ekf)}")
+    imu = ViaEstimation.Imu.Mahony.update(imu, dt_accel_gyro)
     %{roll_rad: roll_rad, pitch_rad: pitch_rad, yaw_rad: yaw_rad} = imu
     # Calculcate rbg_prime
     cosphi = :math.cos(roll_rad)
@@ -67,7 +69,7 @@ defmodule ViaEstimation.Ekf.SevenState do
     accel_inertial_z =
       az_mpss * cosphi * costheta - ax_mpss * sintheta + ay_mpss * costheta * sinphi
 
-    {ekfs0, ekfs1, ekfs2, ekfs3, ekfs4, ekfs5, _ekfs6} = state.ekf_state
+    {ekfs0, ekfs1, ekfs2, ekfs3, ekfs4, ekfs5, _ekfs6} = ekf_state
 
     ekf_state =
       {ekfs0 + ekfs3 * dt_s, ekfs1 + ekfs4 * dt_s, ekfs2 + ekfs5 * dt_s,
@@ -84,7 +86,7 @@ defmodule ViaEstimation.Ekf.SevenState do
      ekfcov24, ekfcov25, _ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
      ekfcov36, ekfcov40, ekfcov41, ekfcov42, ekfcov43, ekfcov44, ekfcov45, ekfcov46, ekfcov50,
      ekfcov51, ekfcov52, ekfcov53, ekfcov54, ekfcov55, ekfcov56, ekfcov60, ekfcov61, ekfcov62,
-     ekfcov63, ekfcov64, ekfcov65, ekfcov66} = state.ekf_cov
+     ekfcov63, ekfcov64, ekfcov65, ekfcov66} = ekf_cov
 
     c00 = ekfcov00 + dt_s * ekfcov30
     c01 = ekfcov01 + dt_s * ekfcov31
@@ -139,7 +141,7 @@ defmodule ViaEstimation.Ekf.SevenState do
     c65 = ekfcov65
     c66 = ekfcov66
 
-    {q00, q11, q22, q33, q44, q55, q66} = state.q_ekf
+    {q00, q11, q22, q33, q44, q55, q66} = q_ekf
 
     ekf_cov =
       {c00 + q00 + c03 * dt_s, c01 + c04 * dt_s, c02 + c05 * dt_s, c03 + c06 * gps0,
@@ -181,27 +183,29 @@ defmodule ViaEstimation.Ekf.SevenState do
 
     position_down_m = -Map.fetch!(position_rrm, SVN.altitude_m())
 
+    %{origin: origin, r_gps: r_gps, ekf_cov: ekf_cov, ekf_state: ekf_state} = state
+
     origin =
-      if is_nil(state.origin) do
+      if is_nil(origin) do
         position_rrm
         |> Map.take([SVN.latitude_rad(), SVN.longitude_rad()])
         |> Map.put(:position_down_m, position_down_m)
       else
-        state.origin
+        origin
       end
 
     {dx, dy} = ViaUtils.Location.dx_dy_between_points(origin, position_rrm)
 
     dz = position_down_m - origin.position_down_m
 
-    {r00, r11, r22, r33, r44, r55} = state.r_gps
+    {r00, r11, r22, r33, r44, r55} = r_gps
 
     {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, ekfcov06, ekfcov10, ekfcov11,
      ekfcov12, ekfcov13, ekfcov14, ekfcov15, ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
      ekfcov24, ekfcov25, ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
      ekfcov36, ekfcov40, ekfcov41, ekfcov42, ekfcov43, ekfcov44, ekfcov45, ekfcov46, ekfcov50,
      ekfcov51, ekfcov52, ekfcov53, ekfcov54, ekfcov55, ekfcov56, ekfcov60, ekfcov61, ekfcov62,
-     ekfcov63, ekfcov64, ekfcov65, ekfcov66} = state.ekf_cov
+     ekfcov63, ekfcov64, ekfcov65, ekfcov66} = ekf_cov
 
     # Using 1-based indexing for this, because it used to be with Matrex
     m11 = ekfcov00 + r00
@@ -825,7 +829,7 @@ defmodule ViaEstimation.Ekf.SevenState do
         ekfcov63 * inv_mat35 + ekfcov64 * inv_mat45 + ekfcov65 * inv_mat55
 
     {ekf_state0, ekf_state1, ekf_state2, ekf_state3, ekf_state4, ekf_state5, ekf_state6} =
-      state.ekf_state
+      ekf_state
 
     dz0 = dx - ekf_state0
     dz1 = dy - ekf_state1
@@ -979,20 +983,20 @@ defmodule ViaEstimation.Ekf.SevenState do
         ekfcov46 * k64 - ekfcov56 * k65
     }
 
-    {cov_index, cov_max} =
-      Enum.reduce(0..48, {-1, 0}, fn index, {cov_index, cov_max} ->
-        value = abs(elem(ekf_cov, index))
-        if value > cov_max, do: {index, value}, else: {cov_index, cov_max}
-      end)
+    # {cov_index, cov_max} =
+    #   Enum.reduce(0..48, {-1, 0}, fn index, {cov_index, cov_max} ->
+    #     value = abs(elem(ekf_cov, index))
+    #     if value > cov_max, do: {index, value}, else: {cov_index, cov_max}
+    #   end)
 
-    if cov_max > 1 do
-      str =
-        Enum.reduce(0..48, "", fn index, str ->
-          str <> ViaUtils.Format.eftb(elem(ekf_cov, index), 4) <> ","
-        end)
+    # if cov_max > 1 do
+    #   str =
+    #     Enum.reduce(0..48, "", fn index, str ->
+    #       str <> ViaUtils.Format.eftb(elem(ekf_cov, index), 4) <> ","
+    #     end)
 
-      Logger.warn(str)
-    end
+    #   Logger.warn(str)
+    # end
 
     # Logger.warn("cov max/index: #{ViaUtils.Format.eftb(cov_max, 5)}/#{cov_index}")
 
@@ -1000,9 +1004,17 @@ defmodule ViaEstimation.Ekf.SevenState do
   end
 
   def update_from_heading(state, heading_rad) do
-    if state.heading_established do
+    %{
+      heading_established: heading_established,
+      ekf_state: ekf_state,
+      r_heading: r_heading,
+      imu: imu,
+      ekf_cov: ekf_cov
+    } = state
+
+    if heading_established do
       {ekf_state0, ekf_state1, ekf_state2, ekf_state3, ekf_state4, ekf_state5, ekf_state6} =
-        state.ekf_state
+        ekf_state
 
       delta_z = ViaUtils.Motion.turn_left_or_right_for_correction(heading_rad - ekf_state6)
 
@@ -1015,9 +1027,9 @@ defmodule ViaEstimation.Ekf.SevenState do
        ekfcov24, ekfcov25, ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
        ekfcov36, ekfcov40, ekfcov41, ekfcov42, ekfcov43, ekfcov44, ekfcov45, ekfcov46, ekfcov50,
        ekfcov51, ekfcov52, ekfcov53, ekfcov54, ekfcov55, ekfcov56, ekfcov60, ekfcov61, ekfcov62,
-       ekfcov63, ekfcov64, ekfcov65, ekfcov66} = state.ekf_cov
+       ekfcov63, ekfcov64, ekfcov65, ekfcov66} = ekf_cov
 
-      {r_heading} = state.r_heading
+      {r_heading} = r_heading
 
       mat_div = ekfcov66 + r_heading
 
@@ -1061,11 +1073,11 @@ defmodule ViaEstimation.Ekf.SevenState do
          -ekfcov66 * (k60 - 1)}
 
       delta_yaw = delta_z * k60
-      imu = ViaEstimation.Imu.Utils.rotate_yaw_rad(state.imu, delta_yaw)
+      imu = ViaEstimation.Imu.Utils.rotate_yaw_rad(imu, delta_yaw)
       %{state | imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov}
     else
       Logger.debug("Established heading at #{ViaUtils.Format.eftb_deg(heading_rad, 2)}")
-      ekf_state = state.ekf_state |> Kernel.put_elem(6, heading_rad)
+      ekf_state = ekf_state |> Kernel.put_elem(6, heading_rad)
 
       %{state | ekf_state: ekf_state, heading_established: true}
     end
@@ -1709,32 +1721,6 @@ defmodule ViaEstimation.Ekf.SevenState do
     end)
     |> List.to_tuple()
   end
-
-  # @spec position_rrm(struct()) :: struct()
-  # def position_rrm(state) do
-  #   %{origin: origin, ekf_state: ekf_state} = state
-  #   if is_nil(origin) do
-  #     nil
-  #   else
-  #     {latitude_rad, longitude_rad, position_down_m, _, _, _, _} = ekf_state
-
-  #     %{origin_lat, origin_lon, origin_pos_down} = origin
-  #     ViaUtils.Location.location_from_point_with_dx_dy(origin_lat, origin_lon, latitude_rad, longitude_rad)
-  #     |> Map.from_struct()
-  #     |> Map.put(SVN.altitude_m(), -position_down_m)
-  #   end
-  # end
-
-  # @spec velocity_mps(struct()) :: map()
-  # def velocity_mps(state) do
-  #   {_, _, _, v_north_mps, v_east_mps, v_down_mps} = state.ekf_state
-
-  #   %{
-  #     SVN.v_north_mps() => v_north_mps,
-  #     SVN.v_east_mps() => v_east_mps,
-  #     SVN.v_down_mps() => v_down_mps
-  #   }
-  # end
 
   @spec position_rrm_velocity_mps(struct()) :: tuple()
   def position_rrm_velocity_mps(state) do
