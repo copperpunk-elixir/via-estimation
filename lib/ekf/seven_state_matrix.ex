@@ -79,9 +79,9 @@ defmodule ViaEstimation.Ekf.SevenState do
     gps1 = rbgp10 * ax_mpss + rbgp11 * ay_mpss + rbgp12 * az_mpss
     gps2 = rbgp20 * ax_mpss + rbgp21 * ay_mpss + rbgp22 * az_mpss
 
-    {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, ekfcov06, ekfcov10, ekfcov11,
-     ekfcov12, ekfcov13, ekfcov14, ekfcov15, ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
-     ekfcov24, ekfcov25, ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
+    {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, _ekfcov06, ekfcov10, ekfcov11,
+     ekfcov12, ekfcov13, ekfcov14, ekfcov15, _ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
+     ekfcov24, ekfcov25, _ekfcov26, ekfcov30, ekfcov31, ekfcov32, ekfcov33, ekfcov34, ekfcov35,
      ekfcov36, ekfcov40, ekfcov41, ekfcov42, ekfcov43, ekfcov44, ekfcov45, ekfcov46, ekfcov50,
      ekfcov51, ekfcov52, ekfcov53, ekfcov54, ekfcov55, ekfcov56, ekfcov60, ekfcov61, ekfcov62,
      ekfcov63, ekfcov64, ekfcov65, ekfcov66} = state.ekf_cov
@@ -92,21 +92,24 @@ defmodule ViaEstimation.Ekf.SevenState do
     c03 = ekfcov03 + dt_s * ekfcov33
     c04 = ekfcov04 + dt_s * ekfcov34
     c05 = ekfcov05 + dt_s * ekfcov35
-    c06 = ekfcov06 + dt_s * ekfcov36
+    # ekfcov06 + dt_s * ekfcov36
+    c06 = 0
     c10 = ekfcov10 + dt_s * ekfcov40
     c11 = ekfcov11 + dt_s * ekfcov41
     c12 = ekfcov12 + dt_s * ekfcov42
     c13 = ekfcov13 + dt_s * ekfcov43
     c14 = ekfcov14 + dt_s * ekfcov44
     c15 = ekfcov15 + dt_s * ekfcov45
-    c16 = ekfcov16 + dt_s * ekfcov46
+    # ekfcov16 + dt_s * ekfcov46
+    c16 = 0
     c20 = ekfcov20 + dt_s * ekfcov50
     c21 = ekfcov21 + dt_s * ekfcov51
     c22 = ekfcov22 + dt_s * ekfcov52
     c23 = ekfcov23 + dt_s * ekfcov53
     c24 = ekfcov24 + dt_s * ekfcov54
     c25 = ekfcov25 + dt_s * ekfcov55
-    c26 = ekfcov26 + dt_s * ekfcov56
+    # ekfcov26 + dt_s * ekfcov56
+    c26 = 0
     c30 = ekfcov30 + ekfcov60 * gps0
     c31 = ekfcov31 + ekfcov61 * gps0
     c32 = ekfcov32 + ekfcov62 * gps0
@@ -151,6 +154,21 @@ defmodule ViaEstimation.Ekf.SevenState do
        c60 + c63 * dt_s, c61 + c64 * dt_s, c62 + c65 * dt_s, c63 + c66 * gps0, c64 + c66 * gps1,
        c65 + c66 * gps2, c66 + q66}
 
+    # {cov_index, cov_max} =
+    #   Enum.reduce(0..48, {-1, 0}, fn index, {cov_index, cov_max} ->
+    #     value = abs(elem(ekf_cov, index))
+    #     if value > cov_max, do: {index, value}, else: {cov_index, cov_max}
+    #   end)
+
+    # if cov_max > 1 do
+    #   str =
+    #     Enum.reduce(0..48, "pred: ", fn index, str ->
+    #       str <> ViaUtils.Format.eftb(elem(ekf_cov, index), 4) <> ","
+    #     end)
+
+    #   Logger.warn(str)
+    # end
+
     %{state | imu: imu, ekf_state: ekf_state, ekf_cov: ekf_cov}
   end
 
@@ -161,18 +179,20 @@ defmodule ViaEstimation.Ekf.SevenState do
       SVN.v_down_mps() => v_down_mps
     } = velocity_mps
 
-    altitude_m = -Map.fetch!(position_rrm, SVN.altitude_m())
+    position_down_m = -Map.fetch!(position_rrm, SVN.altitude_m())
 
     origin =
       if is_nil(state.origin) do
-        position_rrm |> Map.put(SVN.altitude_m(), altitude_m)
+        position_rrm
+        |> Map.take([SVN.latitude_rad(), SVN.longitude_rad()])
+        |> Map.put(:position_down_m, position_down_m)
       else
         state.origin
       end
 
     {dx, dy} = ViaUtils.Location.dx_dy_between_points(origin, position_rrm)
 
-    dz = altitude_m - origin.altitude_m
+    dz = position_down_m - origin.position_down_m
 
     {r00, r11, r22, r33, r44, r55} = state.r_gps
 
@@ -821,108 +841,160 @@ defmodule ViaEstimation.Ekf.SevenState do
       ekf_state3 + dz0 * k30 + dz1 * k31 + dz2 * k32 + dz3 * k33 + dz4 * k34 + dz5 * k35,
       ekf_state4 + dz0 * k40 + dz1 * k41 + dz2 * k42 + dz3 * k43 + dz4 * k44 + dz5 * k45,
       ekf_state5 + dz0 * k50 + dz1 * k51 + dz2 * k52 + dz3 * k53 + dz4 * k54 + dz5 * k55,
-      ekf_state6 + dz0 * k60 + dz1 * k61 + dz2 * k62 + dz3 * k63 + dz4 * k64 + dz5 * k65
+      # + dz0 * k60 + dz1 * k61 + dz2 * k62 + dz3 * k63 + dz4 * k64 + dz5 * k65
+      ekf_state6
     }
 
-    ekf_cov =
-      {-ekfcov10 * k01 - ekfcov20 * k02 - ekfcov30 * k03 - ekfcov40 * k04 - ekfcov50 * k05 -
-         ekfcov00 * (k00 - 1),
-       -ekfcov11 * k01 - ekfcov21 * k02 - ekfcov31 * k03 - ekfcov41 * k04 - ekfcov51 * k05 -
-         ekfcov01 * (k00 - 1),
-       -ekfcov12 * k01 - ekfcov22 * k02 - ekfcov32 * k03 - ekfcov42 * k04 - ekfcov52 * k05 -
-         ekfcov02 * (k00 - 1),
-       -ekfcov13 * k01 - ekfcov23 * k02 - ekfcov33 * k03 - ekfcov43 * k04 - ekfcov53 * k05 -
-         ekfcov03 * (k00 - 1),
-       -ekfcov14 * k01 - ekfcov24 * k02 - ekfcov34 * k03 - ekfcov44 * k04 - ekfcov54 * k05 -
-         ekfcov04 * (k00 - 1),
-       -ekfcov15 * k01 - ekfcov25 * k02 - ekfcov35 * k03 - ekfcov45 * k04 - ekfcov55 * k05 -
-         ekfcov05 * (k00 - 1),
-       -ekfcov16 * k01 - ekfcov26 * k02 - ekfcov36 * k03 - ekfcov46 * k04 - ekfcov56 * k05 -
-         ekfcov06 * (k00 - 1),
-       -ekfcov00 * k10 - ekfcov20 * k12 - ekfcov30 * k13 - ekfcov40 * k14 - ekfcov50 * k15 -
-         ekfcov10 * (k11 - 1),
-       -ekfcov01 * k10 - ekfcov21 * k12 - ekfcov31 * k13 - ekfcov41 * k14 - ekfcov51 * k15 -
-         ekfcov11 * (k11 - 1),
-       -ekfcov02 * k10 - ekfcov22 * k12 - ekfcov32 * k13 - ekfcov42 * k14 - ekfcov52 * k15 -
-         ekfcov12 * (k11 - 1),
-       -ekfcov03 * k10 - ekfcov23 * k12 - ekfcov33 * k13 - ekfcov43 * k14 - ekfcov53 * k15 -
-         ekfcov13 * (k11 - 1),
-       -ekfcov04 * k10 - ekfcov24 * k12 - ekfcov34 * k13 - ekfcov44 * k14 - ekfcov54 * k15 -
-         ekfcov14 * (k11 - 1),
-       -ekfcov05 * k10 - ekfcov25 * k12 - ekfcov35 * k13 - ekfcov45 * k14 - ekfcov55 * k15 -
-         ekfcov15 * (k11 - 1),
-       -ekfcov06 * k10 - ekfcov26 * k12 - ekfcov36 * k13 - ekfcov46 * k14 - ekfcov56 * k15 -
-         ekfcov16 * (k11 - 1),
-       -ekfcov00 * k20 - ekfcov10 * k21 - ekfcov30 * k23 - ekfcov40 * k24 - ekfcov50 * k25 -
-         ekfcov20 * (k22 - 1),
-       -ekfcov01 * k20 - ekfcov11 * k21 - ekfcov31 * k23 - ekfcov41 * k24 - ekfcov51 * k25 -
-         ekfcov21 * (k22 - 1),
-       -ekfcov02 * k20 - ekfcov12 * k21 - ekfcov32 * k23 - ekfcov42 * k24 - ekfcov52 * k25 -
-         ekfcov22 * (k22 - 1),
-       -ekfcov03 * k20 - ekfcov13 * k21 - ekfcov33 * k23 - ekfcov43 * k24 - ekfcov53 * k25 -
-         ekfcov23 * (k22 - 1),
-       -ekfcov04 * k20 - ekfcov14 * k21 - ekfcov34 * k23 - ekfcov44 * k24 - ekfcov54 * k25 -
-         ekfcov24 * (k22 - 1),
-       -ekfcov05 * k20 - ekfcov15 * k21 - ekfcov35 * k23 - ekfcov45 * k24 - ekfcov55 * k25 -
-         ekfcov25 * (k22 - 1),
-       -ekfcov06 * k20 - ekfcov16 * k21 - ekfcov36 * k23 - ekfcov46 * k24 - ekfcov56 * k25 -
-         ekfcov26 * (k22 - 1),
-       -ekfcov00 * k30 - ekfcov10 * k31 - ekfcov20 * k32 - ekfcov40 * k34 - ekfcov50 * k35 -
-         ekfcov30 * (k33 - 1),
-       -ekfcov01 * k30 - ekfcov11 * k31 - ekfcov21 * k32 - ekfcov41 * k34 - ekfcov51 * k35 -
-         ekfcov31 * (k33 - 1),
-       -ekfcov02 * k30 - ekfcov12 * k31 - ekfcov22 * k32 - ekfcov42 * k34 - ekfcov52 * k35 -
-         ekfcov32 * (k33 - 1),
-       -ekfcov03 * k30 - ekfcov13 * k31 - ekfcov23 * k32 - ekfcov43 * k34 - ekfcov53 * k35 -
-         ekfcov33 * (k33 - 1),
-       -ekfcov04 * k30 - ekfcov14 * k31 - ekfcov24 * k32 - ekfcov44 * k34 - ekfcov54 * k35 -
-         ekfcov34 * (k33 - 1),
-       -ekfcov05 * k30 - ekfcov15 * k31 - ekfcov25 * k32 - ekfcov45 * k34 - ekfcov55 * k35 -
-         ekfcov35 * (k33 - 1),
-       -ekfcov06 * k30 - ekfcov16 * k31 - ekfcov26 * k32 - ekfcov46 * k34 - ekfcov56 * k35 -
-         ekfcov36 * (k33 - 1),
-       -ekfcov00 * k40 - ekfcov10 * k41 - ekfcov20 * k42 - ekfcov30 * k43 - ekfcov50 * k45 -
-         ekfcov40 * (k44 - 1),
-       -ekfcov01 * k40 - ekfcov11 * k41 - ekfcov21 * k42 - ekfcov31 * k43 - ekfcov51 * k45 -
-         ekfcov41 * (k44 - 1),
-       -ekfcov02 * k40 - ekfcov12 * k41 - ekfcov22 * k42 - ekfcov32 * k43 - ekfcov52 * k45 -
-         ekfcov42 * (k44 - 1),
-       -ekfcov03 * k40 - ekfcov13 * k41 - ekfcov23 * k42 - ekfcov33 * k43 - ekfcov53 * k45 -
-         ekfcov43 * (k44 - 1),
-       -ekfcov04 * k40 - ekfcov14 * k41 - ekfcov24 * k42 - ekfcov34 * k43 - ekfcov54 * k45 -
-         ekfcov44 * (k44 - 1),
-       -ekfcov05 * k40 - ekfcov15 * k41 - ekfcov25 * k42 - ekfcov35 * k43 - ekfcov55 * k45 -
-         ekfcov45 * (k44 - 1),
-       -ekfcov06 * k40 - ekfcov16 * k41 - ekfcov26 * k42 - ekfcov36 * k43 - ekfcov56 * k45 -
-         ekfcov46 * (k44 - 1),
-       -ekfcov00 * k50 - ekfcov10 * k51 - ekfcov20 * k52 - ekfcov30 * k53 - ekfcov40 * k54 -
-         ekfcov50 * (k55 - 1),
-       -ekfcov01 * k50 - ekfcov11 * k51 - ekfcov21 * k52 - ekfcov31 * k53 - ekfcov41 * k54 -
-         ekfcov51 * (k55 - 1),
-       -ekfcov02 * k50 - ekfcov12 * k51 - ekfcov22 * k52 - ekfcov32 * k53 - ekfcov42 * k54 -
-         ekfcov52 * (k55 - 1),
-       -ekfcov03 * k50 - ekfcov13 * k51 - ekfcov23 * k52 - ekfcov33 * k53 - ekfcov43 * k54 -
-         ekfcov53 * (k55 - 1),
-       -ekfcov04 * k50 - ekfcov14 * k51 - ekfcov24 * k52 - ekfcov34 * k53 - ekfcov44 * k54 -
-         ekfcov54 * (k55 - 1),
-       -ekfcov05 * k50 - ekfcov15 * k51 - ekfcov25 * k52 - ekfcov35 * k53 - ekfcov45 * k54 -
-         ekfcov55 * (k55 - 1),
-       -ekfcov06 * k50 - ekfcov16 * k51 - ekfcov26 * k52 - ekfcov36 * k53 - ekfcov46 * k54 -
-         ekfcov56 * (k55 - 1),
-       ekfcov60 - ekfcov00 * k60 - ekfcov10 * k61 - ekfcov20 * k62 - ekfcov30 * k63 -
-         ekfcov40 * k64 - ekfcov50 * k65,
-       ekfcov61 - ekfcov01 * k60 - ekfcov11 * k61 - ekfcov21 * k62 - ekfcov31 * k63 -
-         ekfcov41 * k64 - ekfcov51 * k65,
-       ekfcov62 - ekfcov02 * k60 - ekfcov12 * k61 - ekfcov22 * k62 - ekfcov32 * k63 -
-         ekfcov42 * k64 - ekfcov52 * k65,
-       ekfcov63 - ekfcov03 * k60 - ekfcov13 * k61 - ekfcov23 * k62 - ekfcov33 * k63 -
-         ekfcov43 * k64 - ekfcov53 * k65,
-       ekfcov64 - ekfcov04 * k60 - ekfcov14 * k61 - ekfcov24 * k62 - ekfcov34 * k63 -
-         ekfcov44 * k64 - ekfcov54 * k65,
-       ekfcov65 - ekfcov05 * k60 - ekfcov15 * k61 - ekfcov25 * k62 - ekfcov35 * k63 -
-         ekfcov45 * k64 - ekfcov55 * k65,
-       ekfcov66 - ekfcov06 * k60 - ekfcov16 * k61 - ekfcov26 * k62 - ekfcov36 * k63 -
-         ekfcov46 * k64 - ekfcov56 * k65}
+    # {state0_post, state1_post, _, _, _, _, state6_post} = ekf_state
+
+    # dyaw = dz0 * k60 + dz1 * k61 + dz2 * k62 + dz3 * k63 + dz4 * k64 + dz5 * k65
+    # # {x, y, z, _, _, _, _} = ekf_state
+    # Logger.info("ufgps x/y: #{ViaUtils.Format.eftb(dx, 4)}/#{ViaUtils.Format.eftb(dy, 4)}")
+
+    # Logger.info(
+    #   "ufgps pre x/y: #{ViaUtils.Format.eftb(ekf_state0, 2)}/#{ViaUtils.Format.eftb(ekf_state1, 2)}/#{ViaUtils.Format.eftb_deg(ekf_state6, 1)}"
+    # )
+
+    # Logger.info(
+    #   "ufgps dx/dy/dz/dyaw: #{ViaUtils.Format.eftb(dz0, 2)}/#{ViaUtils.Format.eftb(dz1, 2)}/#{ViaUtils.Format.eftb(dz2, 2)}/#{ViaUtils.Format.eftb_deg(dyaw, 1)}"
+    # )
+
+    # Logger.info(
+    #   "ufgps postx/y: #{ViaUtils.Format.eftb(state0_post, 2)}/#{ViaUtils.Format.eftb(state1_post, 2)}/#{ViaUtils.Format.eftb_deg(state6_post, 1)}"
+    # )
+
+    # Logger.info(
+    #   "ufgps x/y/z: #{ViaUtils.Format.eftb(x, 2)}/#{ViaUtils.Format.eftb(y, 2)}/#{ViaUtils.Format.eftb(z, 2)}"
+    # )
+
+    # Logger.info(
+    #   "ufgps dvx/dvy/dvz: #{ViaUtils.Format.eftb(dz3, 2)}/#{ViaUtils.Format.eftb(dz4, 2)}/#{ViaUtils.Format.eftb(dz5, 2)}"
+    # )
+
+    # Logger.info(
+    #   "ufgps vx/vy/vz: #{ViaUtils.Format.eftb(vx, 2)}/#{ViaUtils.Format.eftb(vy, 2)}/#{ViaUtils.Format.eftb(vz, 2)}"
+    # )
+
+    # Logger.info("dyaw: #{ViaUtils.Format.eftb_deg(dyaw,1)}")
+
+    ekf_cov = {
+      -ekfcov10 * k01 - ekfcov20 * k02 - ekfcov30 * k03 - ekfcov40 * k04 - ekfcov50 * k05 -
+        ekfcov00 * (k00 - 1),
+      -ekfcov11 * k01 - ekfcov21 * k02 - ekfcov31 * k03 - ekfcov41 * k04 - ekfcov51 * k05 -
+        ekfcov01 * (k00 - 1),
+      -ekfcov12 * k01 - ekfcov22 * k02 - ekfcov32 * k03 - ekfcov42 * k04 - ekfcov52 * k05 -
+        ekfcov02 * (k00 - 1),
+      -ekfcov13 * k01 - ekfcov23 * k02 - ekfcov33 * k03 - ekfcov43 * k04 - ekfcov53 * k05 -
+        ekfcov03 * (k00 - 1),
+      -ekfcov14 * k01 - ekfcov24 * k02 - ekfcov34 * k03 - ekfcov44 * k04 - ekfcov54 * k05 -
+        ekfcov04 * (k00 - 1),
+      -ekfcov15 * k01 - ekfcov25 * k02 - ekfcov35 * k03 - ekfcov45 * k04 - ekfcov55 * k05 -
+        ekfcov05 * (k00 - 1),
+      -ekfcov16 * k01 - ekfcov26 * k02 - ekfcov36 * k03 - ekfcov46 * k04 - ekfcov56 * k05 -
+        ekfcov06 * (k00 - 1),
+      -ekfcov00 * k10 - ekfcov20 * k12 - ekfcov30 * k13 - ekfcov40 * k14 - ekfcov50 * k15 -
+        ekfcov10 * (k11 - 1),
+      -ekfcov01 * k10 - ekfcov21 * k12 - ekfcov31 * k13 - ekfcov41 * k14 - ekfcov51 * k15 -
+        ekfcov11 * (k11 - 1),
+      -ekfcov02 * k10 - ekfcov22 * k12 - ekfcov32 * k13 - ekfcov42 * k14 - ekfcov52 * k15 -
+        ekfcov12 * (k11 - 1),
+      -ekfcov03 * k10 - ekfcov23 * k12 - ekfcov33 * k13 - ekfcov43 * k14 - ekfcov53 * k15 -
+        ekfcov13 * (k11 - 1),
+      -ekfcov04 * k10 - ekfcov24 * k12 - ekfcov34 * k13 - ekfcov44 * k14 - ekfcov54 * k15 -
+        ekfcov14 * (k11 - 1),
+      -ekfcov05 * k10 - ekfcov25 * k12 - ekfcov35 * k13 - ekfcov45 * k14 - ekfcov55 * k15 -
+        ekfcov15 * (k11 - 1),
+      # This one blows up
+      -ekfcov06 * k10 - ekfcov26 * k12 - ekfcov36 * k13 - ekfcov46 * k14 - ekfcov56 * k15 -
+        ekfcov16 * (k11 - 1),
+      -ekfcov00 * k20 - ekfcov10 * k21 - ekfcov30 * k23 - ekfcov40 * k24 - ekfcov50 * k25 -
+        ekfcov20 * (k22 - 1),
+      -ekfcov01 * k20 - ekfcov11 * k21 - ekfcov31 * k23 - ekfcov41 * k24 - ekfcov51 * k25 -
+        ekfcov21 * (k22 - 1),
+      -ekfcov02 * k20 - ekfcov12 * k21 - ekfcov32 * k23 - ekfcov42 * k24 - ekfcov52 * k25 -
+        ekfcov22 * (k22 - 1),
+      -ekfcov03 * k20 - ekfcov13 * k21 - ekfcov33 * k23 - ekfcov43 * k24 - ekfcov53 * k25 -
+        ekfcov23 * (k22 - 1),
+      -ekfcov04 * k20 - ekfcov14 * k21 - ekfcov34 * k23 - ekfcov44 * k24 - ekfcov54 * k25 -
+        ekfcov24 * (k22 - 1),
+      -ekfcov05 * k20 - ekfcov15 * k21 - ekfcov35 * k23 - ekfcov45 * k24 - ekfcov55 * k25 -
+        ekfcov25 * (k22 - 1),
+      -ekfcov06 * k20 - ekfcov16 * k21 - ekfcov36 * k23 - ekfcov46 * k24 - ekfcov56 * k25 -
+        ekfcov26 * (k22 - 1),
+      -ekfcov00 * k30 - ekfcov10 * k31 - ekfcov20 * k32 - ekfcov40 * k34 - ekfcov50 * k35 -
+        ekfcov30 * (k33 - 1),
+      -ekfcov01 * k30 - ekfcov11 * k31 - ekfcov21 * k32 - ekfcov41 * k34 - ekfcov51 * k35 -
+        ekfcov31 * (k33 - 1),
+      -ekfcov02 * k30 - ekfcov12 * k31 - ekfcov22 * k32 - ekfcov42 * k34 - ekfcov52 * k35 -
+        ekfcov32 * (k33 - 1),
+      -ekfcov03 * k30 - ekfcov13 * k31 - ekfcov23 * k32 - ekfcov43 * k34 - ekfcov53 * k35 -
+        ekfcov33 * (k33 - 1),
+      -ekfcov04 * k30 - ekfcov14 * k31 - ekfcov24 * k32 - ekfcov44 * k34 - ekfcov54 * k35 -
+        ekfcov34 * (k33 - 1),
+      -ekfcov05 * k30 - ekfcov15 * k31 - ekfcov25 * k32 - ekfcov45 * k34 - ekfcov55 * k35 -
+        ekfcov35 * (k33 - 1),
+      -ekfcov06 * k30 - ekfcov16 * k31 - ekfcov26 * k32 - ekfcov46 * k34 - ekfcov56 * k35 -
+        ekfcov36 * (k33 - 1),
+      -ekfcov00 * k40 - ekfcov10 * k41 - ekfcov20 * k42 - ekfcov30 * k43 - ekfcov50 * k45 -
+        ekfcov40 * (k44 - 1),
+      -ekfcov01 * k40 - ekfcov11 * k41 - ekfcov21 * k42 - ekfcov31 * k43 - ekfcov51 * k45 -
+        ekfcov41 * (k44 - 1),
+      -ekfcov02 * k40 - ekfcov12 * k41 - ekfcov22 * k42 - ekfcov32 * k43 - ekfcov52 * k45 -
+        ekfcov42 * (k44 - 1),
+      -ekfcov03 * k40 - ekfcov13 * k41 - ekfcov23 * k42 - ekfcov33 * k43 - ekfcov53 * k45 -
+        ekfcov43 * (k44 - 1),
+      -ekfcov04 * k40 - ekfcov14 * k41 - ekfcov24 * k42 - ekfcov34 * k43 - ekfcov54 * k45 -
+        ekfcov44 * (k44 - 1),
+      -ekfcov05 * k40 - ekfcov15 * k41 - ekfcov25 * k42 - ekfcov35 * k43 - ekfcov55 * k45 -
+        ekfcov45 * (k44 - 1),
+      -ekfcov06 * k40 - ekfcov16 * k41 - ekfcov26 * k42 - ekfcov36 * k43 - ekfcov56 * k45 -
+        ekfcov46 * (k44 - 1),
+      -ekfcov00 * k50 - ekfcov10 * k51 - ekfcov20 * k52 - ekfcov30 * k53 - ekfcov40 * k54 -
+        ekfcov50 * (k55 - 1),
+      -ekfcov01 * k50 - ekfcov11 * k51 - ekfcov21 * k52 - ekfcov31 * k53 - ekfcov41 * k54 -
+        ekfcov51 * (k55 - 1),
+      -ekfcov02 * k50 - ekfcov12 * k51 - ekfcov22 * k52 - ekfcov32 * k53 - ekfcov42 * k54 -
+        ekfcov52 * (k55 - 1),
+      -ekfcov03 * k50 - ekfcov13 * k51 - ekfcov23 * k52 - ekfcov33 * k53 - ekfcov43 * k54 -
+        ekfcov53 * (k55 - 1),
+      -ekfcov04 * k50 - ekfcov14 * k51 - ekfcov24 * k52 - ekfcov34 * k53 - ekfcov44 * k54 -
+        ekfcov54 * (k55 - 1),
+      -ekfcov05 * k50 - ekfcov15 * k51 - ekfcov25 * k52 - ekfcov35 * k53 - ekfcov45 * k54 -
+        ekfcov55 * (k55 - 1),
+      -ekfcov06 * k50 - ekfcov16 * k51 - ekfcov26 * k52 - ekfcov36 * k53 - ekfcov46 * k54 -
+        ekfcov56 * (k55 - 1),
+      ekfcov60 - ekfcov00 * k60 - ekfcov10 * k61 - ekfcov20 * k62 - ekfcov30 * k63 -
+        ekfcov40 * k64 - ekfcov50 * k65,
+      ekfcov61 - ekfcov01 * k60 - ekfcov11 * k61 - ekfcov21 * k62 - ekfcov31 * k63 -
+        ekfcov41 * k64 - ekfcov51 * k65,
+      ekfcov62 - ekfcov02 * k60 - ekfcov12 * k61 - ekfcov22 * k62 - ekfcov32 * k63 -
+        ekfcov42 * k64 - ekfcov52 * k65,
+      ekfcov63 - ekfcov03 * k60 - ekfcov13 * k61 - ekfcov23 * k62 - ekfcov33 * k63 -
+        ekfcov43 * k64 - ekfcov53 * k65,
+      ekfcov64 - ekfcov04 * k60 - ekfcov14 * k61 - ekfcov24 * k62 - ekfcov34 * k63 -
+        ekfcov44 * k64 - ekfcov54 * k65,
+      ekfcov65 - ekfcov05 * k60 - ekfcov15 * k61 - ekfcov25 * k62 - ekfcov35 * k63 -
+        ekfcov45 * k64 - ekfcov55 * k65,
+      ekfcov66 - ekfcov06 * k60 - ekfcov16 * k61 - ekfcov26 * k62 - ekfcov36 * k63 -
+        ekfcov46 * k64 - ekfcov56 * k65
+    }
+
+    {cov_index, cov_max} =
+      Enum.reduce(0..48, {-1, 0}, fn index, {cov_index, cov_max} ->
+        value = abs(elem(ekf_cov, index))
+        if value > cov_max, do: {index, value}, else: {cov_index, cov_max}
+      end)
+
+    if cov_max > 1 do
+      str =
+        Enum.reduce(0..48, "", fn index, str ->
+          str <> ViaUtils.Format.eftb(elem(ekf_cov, index), 4) <> ","
+        end)
+
+      Logger.warn(str)
+    end
+
+    # Logger.warn("cov max/index: #{ViaUtils.Format.eftb(cov_max, 5)}/#{cov_index}")
 
     %{state | ekf_state: ekf_state, ekf_cov: ekf_cov, origin: origin}
   end
@@ -933,6 +1005,10 @@ defmodule ViaEstimation.Ekf.SevenState do
         state.ekf_state
 
       delta_z = ViaUtils.Motion.turn_left_or_right_for_correction(heading_rad - ekf_state6)
+
+      # Logger.debug(
+      #   "ufh hdg/ste/dz: #{ViaUtils.Format.eftb_deg(heading_rad, 1)}/#{ViaUtils.Format.eftb_deg(ekf_state6, 1)}/#{ViaUtils.Format.eftb_deg(delta_z, 1)}"
+      # )
 
       {ekfcov00, ekfcov01, ekfcov02, ekfcov03, ekfcov04, ekfcov05, ekfcov06, ekfcov10, ekfcov11,
        ekfcov12, ekfcov13, ekfcov14, ekfcov15, ekfcov16, ekfcov20, ekfcov21, ekfcov22, ekfcov23,
@@ -1634,44 +1710,59 @@ defmodule ViaEstimation.Ekf.SevenState do
     |> List.to_tuple()
   end
 
-  @spec position_rrm(struct()) :: struct()
-  def position_rrm(state) do
-    if is_nil(state.origin) do
-      nil
-    else
-      {latitude_rad, longitude_rad, position_down_m, _, _, _, _} = state.ekf_state
+  # @spec position_rrm(struct()) :: struct()
+  # def position_rrm(state) do
+  #   %{origin: origin, ekf_state: ekf_state} = state
+  #   if is_nil(origin) do
+  #     nil
+  #   else
+  #     {latitude_rad, longitude_rad, position_down_m, _, _, _, _} = ekf_state
 
-      ViaUtils.Location.location_from_point_with_dx_dy(state.origin, latitude_rad, longitude_rad)
-      |> Map.put(SVN.altitude_m(), -position_down_m)
-    end
-  end
+  #     %{origin_lat, origin_lon, origin_pos_down} = origin
+  #     ViaUtils.Location.location_from_point_with_dx_dy(origin_lat, origin_lon, latitude_rad, longitude_rad)
+  #     |> Map.from_struct()
+  #     |> Map.put(SVN.altitude_m(), -position_down_m)
+  #   end
+  # end
 
-  @spec velocity_mps(struct()) :: map()
-  def velocity_mps(state) do
-    {_, _, _, v_north_mps, v_east_mps, v_down_mps} = state.ekf_state
+  # @spec velocity_mps(struct()) :: map()
+  # def velocity_mps(state) do
+  #   {_, _, _, v_north_mps, v_east_mps, v_down_mps} = state.ekf_state
 
-    %{
-      SVN.v_north_mps() => v_north_mps,
-      SVN.v_east_mps() => v_east_mps,
-      SVN.v_down_mps() => v_down_mps
-    }
-  end
+  #   %{
+  #     SVN.v_north_mps() => v_north_mps,
+  #     SVN.v_east_mps() => v_east_mps,
+  #     SVN.v_down_mps() => v_down_mps
+  #   }
+  # end
 
   @spec position_rrm_velocity_mps(struct()) :: tuple()
   def position_rrm_velocity_mps(state) do
+    %{origin: origin, ekf_state: ekf_state} = state
+
     {latitude_rad, longitude_rad, position_down_m, v_north_mps, v_east_mps, v_down_mps, _} =
-      state.ekf_state
+      ekf_state
 
     position_rrm =
-      if is_nil(state.origin) do
+      if is_nil(origin) do
         nil
       else
+        %{
+          SVN.latitude_rad() => origin_lat,
+          SVN.longitude_rad() => origin_lon,
+          position_down_m: origin_pos_down
+        } = origin
+
+        # Logger.debug("origin down/ekf_down: #{ViaUtils.Format.eftb(origin_pos_down,1)}/#{ViaUtils.Format.eftb(position_down_m,1)}")
+        origin = ViaUtils.Location.new(origin_lat, origin_lon)
+
         ViaUtils.Location.location_from_point_with_dx_dy(
-          state.origin,
+          origin,
           latitude_rad,
           longitude_rad
         )
-        |> Map.put(SVN.altitude_m(), -position_down_m)
+        |> Map.from_struct()
+        |> Map.put(SVN.altitude_m(), -(position_down_m + origin_pos_down))
       end
 
     velocity_mps = %{
