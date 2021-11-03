@@ -154,4 +154,9 @@ defmodule ViaEstimation.Imu.Mahony do
       {0, 0, 0, 0, 0, false}
     end
   end
+
+  @spec get_attitude(struct()) :: map()
+  def get_attitude(imu) do
+    Map.take(imu, [SVN.roll_rad(), SVN.pitch_rad(), SVN.yaw_rad()])
+  end
 end

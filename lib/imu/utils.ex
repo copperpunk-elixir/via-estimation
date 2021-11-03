@@ -1,4 +1,6 @@
 defmodule ViaEstimation.Imu.Utils do
+  require ViaUtils.Shared.ValueNames, as: SVN
+
   @spec rotate_yaw_rad(struct(), float()) :: struct()
   def rotate_yaw_rad(imu, delta_yaw_rad) do
     %{yaw_rad: yaw_rad} = imu
