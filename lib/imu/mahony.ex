@@ -7,15 +7,20 @@ defmodule ViaEstimation.Imu.Mahony do
   @accel_xy_mag_max 1.0
   @accel_z_delta_mag_max 0.2
 
-  defstruct quat: {1.0, 0, 0, 0},
-            kp: 0,
-            ki: 0,
-            integral_fbx: 0,
-            integral_fby: 0,
-            integral_fbz: 0,
-            roll_rad: 0,
-            pitch_rad: 0,
-            yaw_rad: 0
+  defstruct [
+    SVN.roll_rad(),
+    SVN.pitch_rad(),
+    SVN.yaw_rad(),
+    SVN.rollrate_rps(),
+    SVN.pitchrate_rps(),
+    SVN.yawrate_rps(),
+    quat: {1.0, 0, 0, 0},
+    kp: 0,
+    ki: 0,
+    integral_fbx: 0,
+    integral_fby: 0,
+    integral_fbz: 0
+  ]
 
   @spec new(list()) :: struct()
   def new(parameters) do
@@ -24,7 +29,16 @@ defmodule ViaEstimation.Imu.Mahony do
 
   @spec new(float(), float()) :: struct()
   def new(kp, ki) do
-    %ViaEstimation.Imu.Mahony{kp: kp, ki: ki}
+    %ViaEstimation.Imu.Mahony{
+      SVN.roll_rad() => 0,
+      SVN.pitch_rad() => 0,
+      SVN.yaw_rad() => 0,
+      SVN.rollrate_rps() => 0,
+      SVN.pitchrate_rps() => 0,
+      SVN.yawrate_rps() => 0,
+      kp: kp,
+      ki: ki
+    }
   end
 
   @spec update(struct(), map()) :: struct()
@@ -121,13 +135,16 @@ defmodule ViaEstimation.Imu.Mahony do
 
     %{
       imu
-      | quat: {q0, q1, q2, q3},
+      | SVN.roll_rad() => roll_rad,
+        SVN.pitch_rad() => pitch_rad,
+        SVN.yaw_rad() => yaw_rad,
+        SVN.rollrate_rps() => gx,
+        SVN.pitchrate_rps() => gy,
+        SVN.yawrate_rps() => gz,
+        quat: {q0, q1, q2, q3},
         integral_fbx: integral_fbx,
         integral_fby: integral_fby,
-        integral_fbz: integral_fbz,
-        roll_rad: roll_rad,
-        pitch_rad: pitch_rad,
-        yaw_rad: yaw_rad
+        integral_fbz: integral_fbz
     }
   end
 
@@ -158,5 +175,10 @@ defmodule ViaEstimation.Imu.Mahony do
   @spec get_attitude(struct()) :: map()
   def get_attitude(imu) do
     Map.take(imu, [SVN.roll_rad(), SVN.pitch_rad(), SVN.yaw_rad()])
+  end
+
+  @spec get_attrate(struct()) :: map()
+  def get_attrate(imu) do
+    Map.take(imu, [SVN.rollrate_rps(), SVN.pitchrate_rps(), SVN.yawrate_rps()])
   end
 end
