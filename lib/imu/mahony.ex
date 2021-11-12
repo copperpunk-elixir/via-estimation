@@ -181,4 +181,16 @@ defmodule ViaEstimation.Imu.Mahony do
   def get_attrate(imu) do
     Map.take(imu, [SVN.rollrate_rps(), SVN.pitchrate_rps(), SVN.yawrate_rps()])
   end
+
+  @spec get_attitude_attrate(struct()) :: map()
+  def get_attitude_attrate(imu) do
+    Map.take(imu, [
+      SVN.roll_rad(),
+      SVN.pitch_rad(),
+      SVN.yaw_rad(),
+      SVN.rollrate_rps(),
+      SVN.pitchrate_rps(),
+      SVN.yawrate_rps()
+    ])
+  end
 end
